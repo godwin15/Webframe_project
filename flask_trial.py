@@ -1,13 +1,58 @@
+import time, random, threading
+from turbo_flask import Turbo
 from flask import Flask, render_template, url_for, flash, redirect
 from forms import RegistrationForm
 from flask_sqlalchemy import SQLAlchemy
+from translate_audio import printWAV
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = '924e7b8622b08ed496988a173ef89125'
 
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///site.db'
 db = SQLAlchemy(app)
+interval=10
+FILE_NAME = "RELATIONSHIP.wav"
+turbo = Turbo(app)
 
+@app.route("/captions")
+def captions():
+    TITLE = "RELATIONSHIP"
+    #FILE_NAME = "RELATIONSHIP.wav"
+    return render_template('captions.html', songName=TITLE, file=FILE_NAME)
+@app.before_first_request
+def before_first_request():
+    #resetting time stamp file to 0
+    file = open("pos.txt","w") 
+    file.write(str(0))
+    file.close()
+
+    #starting thread that will time updates
+    threading.Thread(target=update_captions).start()
+
+@app.context_processor
+def inject_load():
+    # getting previous time stamp
+    file = open("pos.txt","r")
+    pos = int(file.read())
+    file.close()
+
+    # writing next time stamp
+    file = open("pos.txt","w")
+    file.write(str(pos+interval))
+    file.close()
+
+    #returning captions
+    return {'caption':printWAV(FILE_NAME, pos=pos, clip=interval)}
+
+def update_captions():
+    with app.app_context():
+        while True:
+            # timing thread waiting for the interval
+            time.sleep(interval)
+
+            # forcefully updating captionsPane with caption
+            turbo.push(turbo.replace(render_template('captionsPane.html'), 'load'))
+	
 class User(db.Model):
   id = db.Column(db.Integer, primary_key=True)
   username = db.Column(db.String(20), unique=True, nullable=False)
